@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AquaGuard — Smart Water Security Monitor</title>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DESIGN CONCEPT:
+     Industrial SCADA terminal meets cybersecurity ops center.
+     Palette: near-black substrate (#0A0E14), phosphor green for
+     defender (#00FF88), crimson for attacker (#FF2D55), amber
+     accent (#FFB800). Mono type (JetBrains Mono) for data;
+     Inter for UI labels. Signature: animated "signal pulse"
+     glow on the PPS readout that breathes with the data rate.
+     ═══════════════════════════════════════════════════════════ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ── RESET & BASE ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base:        #0A0E14;
+    --bg-panel:       #0F1520;
+    --bg-card:        #141C2B;
+    --bg-hacker:      #120A0E;
+    --bg-hacker-card: #1A0D12;
+
+    --phosphor:       #00FF88;
+    --phosphor-dim:   #00FF8833;
+    --phosphor-mid:   #00FF8866;
+
+    --crimson:        #FF2D55;
+    --crimson-dim:    #FF2D5533;
+    --crimson-mid:    #FF2D5566;
+
+    --amber:          #FFB800;
+    --amber-dim:      #FFB80033;
+
+    --cyan:           #00D4FF;
+    --cyan-dim:       #00D4FF22;
+
+    --text-primary:   #E8F4F0;
+    --text-secondary: #7A9080;
+    --text-muted:     #3A5040;
+
+    --text-h-primary:   #F4E8EC;
+    --text-h-secondary: #906070;
+    --text-h-muted:     #50303A;
+
+    --border:         #1E2D20;
+    --border-h:       #2D1E22;
+
+    --mono:  'JetBrains Mono', 'Courier New', monospace;
+    --sans:  'Inter', system-ui, sans-serif;
+
+    --radius: 8px;
+    --radius-sm: 4px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── HEADER / MASTHEAD ────────────────────────────────── */
+  .masthead {
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    background: var(--bg-panel);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .masthead-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--phosphor);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--phosphor);
+    box-shadow: 0 0 8px var(--phosphor-dim);
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 6px var(--phosphor-mid); }
+    50%       { box-shadow: 0 0 18px var(--phosphor), 0 0 36px var(--phosphor-dim); }
+  }
+
+  .brand-name {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--phosphor);
+  }
+
+  .brand-tagline {
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .masthead-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .status-dot.connected {
+    background: var(--phosphor);
+    box-shadow: 0 0 8px var(--phosphor);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+  }
+
+  /* ── LAYOUT ───────────────────────────────────────────── */
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 0;
+    min-height: calc(100vh - 56px);
+  }
+
+  @media (max-width: 960px) {
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  /* ── SECTION LABELS ───────────────────────────────────── */
+  .section-eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    border-bottom: 1px solid;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── DEFENDER PANEL (LEFT) ────────────────────────────── */
+  .defender {
+    border-right: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .defender .section-eyebrow {
+    color: var(--phosphor);
+    border-color: var(--border);
+    background: linear-gradient(90deg, var(--phosphor-dim) 0%, transparent 60%);
+  }
+
+  .defender-body { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── CONNECT BUTTON ───────────────────────────────────── */
+  .connect-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-connect {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--phosphor);
+    background: transparent;
+    color: var(--phosphor);
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-connect:hover {
+    background: var(--phosphor-dim);
+    box-shadow: 0 0 16px var(--phosphor-dim);
+  }
+  .btn-connect:active { transform: scale(0.97); }
+  .btn-connect:disabled {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+
+  .conn-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--mono);
+  }
+
+  /* ── PPS READOUT — SIGNATURE ELEMENT ─────────────────── */
+  .pps-stage {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pps-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, var(--phosphor-dim) 0%, transparent 70%);
+    pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  .pps-stage.status-leak::before {
+    background: radial-gradient(ellipse at 50% 0%, var(--crimson-dim) 0%, transparent 70%);
+  }
+  .pps-stage.status-idle::before {
+    background: radial-gradient(ellipse at 50% 0%, var(--amber-dim) 0%, transparent 70%);
+  }
+
+  .pps-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .pps-value {
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    font-size: 88px;
+    font-weight: 900;
+    line-height: 1.1;
+    min-height: 96px;
+    width: 100%;
+    display: block;
+    text-align: center;
+    color: var(--phosphor);
+    text-shadow: 0 0 20px var(--phosphor), 0 0 60px var(--phosphor-dim);
+    transition: color 0.5s, text-shadow 0.5s;
+    letter-spacing: 0.04em;
+  }
+  .pps-value.status-leak {
+    color: var(--crimson);
+    text-shadow: 0 0 20px var(--crimson), 0 0 60px var(--crimson-dim);
+  }
+  .pps-value.status-idle {
+    color: var(--amber);
+    text-shadow: 0 0 20px var(--amber), 0 0 60px var(--amber-dim);
+  }
+
+  .pps-unit { font-family: var(--mono); font-size: 16px; color: var(--text-secondary); }
+
+  /* ── STATUS BADGE ─────────────────────────────────────── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 24px;
+    border: 1px solid;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    transition: all 0.4s;
+    margin-top: 8px;
+  }
+  .status-badge.status-normal {
+    border-color: var(--phosphor);
+    color: var(--phosphor);
+    background: var(--phosphor-dim);
+    box-shadow: 0 0 16px var(--phosphor-dim);
+  }
+  .status-badge.status-leak {
+    border-color: var(--crimson);
+    color: var(--crimson);
+    background: var(--crimson-dim);
+    box-shadow: 0 0 16px var(--crimson-dim);
+    animation: alarm-pulse 0.8s ease-in-out infinite;
+  }
+  .status-badge.status-idle {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-dim);
+  }
+  .status-badge.status-waiting {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+    background: transparent;
+  }
+  @keyframes alarm-pulse {
+    0%, 100% { box-shadow: 0 0 8px var(--crimson-dim); }
+    50%       { box-shadow: 0 0 24px var(--crimson), 0 0 48px var(--crimson-dim); }
+  }
+
+  /* ── TELEMETRY TABLE ──────────────────────────────────── */
+  .telemetry-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .telemetry-header {
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .token-status-chip {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+  }
+  .token-status-chip.valid {
+    background: var(--phosphor-dim);
+    color: var(--phosphor);
+    border: 1px solid var(--phosphor-mid);
+  }
+  .token-status-chip.invalid {
+    background: var(--crimson-dim);
+    color: var(--crimson);
+    border: 1px solid var(--crimson-mid);
+  }
+  .token-status-chip.waiting {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--text-muted);
+  }
+
+  .telemetry-rows { padding: 4px 0; }
+
+  .telemetry-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .telemetry-row:last-child { border-bottom: none; }
+
+  .trow-key {
+    font-family: var(--mono);
+    color: var(--text-secondary);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .trow-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .trow-val.highlight { color: var(--phosphor); }
+  .trow-val.redacted  { color: var(--text-muted); font-style: italic; }
+
+  /* ── EVENT LOG ────────────────────────────────────────── */
+  .log-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex: 1;
+  }
+  .log-header {
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    justify-content: space-between;
+  }
+  .log-clear {
+    font-size: 10px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+  }
+  .log-clear:hover { color: var(--crimson); }
+  .log-body {
+    height: 160px;
+    overflow-y: auto;
+    padding: 8px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted) transparent;
+  }
+  .log-entry {
+    padding: 4px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    display: flex;
+    gap: 12px;
+    transition: background 0.2s;
+  }
+  .log-entry:hover { background: var(--phosphor-dim); }
+  .log-ts   { color: var(--text-muted); min-width: 70px; }
+  .log-msg  { color: var(--text-secondary); flex: 1; }
+  .log-entry.evt-ok     .log-msg { color: var(--phosphor); }
+  .log-entry.evt-warn   .log-msg { color: var(--amber); }
+  .log-entry.evt-attack .log-msg { color: var(--crimson); font-weight: 600; }
+  .log-entry.evt-info   .log-msg { color: var(--cyan); }
+
+  /* ── ATTACK BLOCKED BANNER ────────────────────────────── */
+  #attack-banner {
+    display: none;
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    background: #1A0007;
+    border: 2px solid var(--crimson);
+    box-shadow: 0 0 40px var(--crimson), 0 0 80px var(--crimson-dim), inset 0 0 30px var(--crimson-dim);
+    border-radius: var(--radius);
+    padding: 20px 32px;
+    text-align: center;
+    min-width: 340px;
+    animation: banner-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes banner-in {
+    from { transform: translateX(-50%) scale(0.85); opacity: 0; }
+    to   { transform: translateX(-50%) scale(1);    opacity: 1; }
+  }
+  .banner-icon  { font-size: 32px; margin-bottom: 6px; }
+  .banner-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--crimson);
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .banner-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #AA4455;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── HACKER PANEL (RIGHT) ─────────────────────────────── */
+  .hacker {
+    background: var(--bg-hacker);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #2A0010;
+  }
+
+  .hacker .section-eyebrow {
+    color: var(--crimson);
+    border-color: var(--border-h);
+    background: linear-gradient(90deg, var(--crimson-dim) 0%, transparent 60%);
+  }
+
+  .hacker-body { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+
+  .hacker-intro {
+    background: var(--bg-hacker-card);
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .hacker-intro p {
+    font-size: 12px;
+    color: var(--text-h-secondary);
+    line-height: 1.7;
+  }
+  .hacker-intro strong { color: var(--crimson); }
+
+  /* ── PAYLOAD CONSTRUCTOR ──────────────────────────────── */
+  .payload-card {
+    background: var(--bg-hacker-card);
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .payload-header {
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-h-secondary);
+    border-bottom: 1px solid var(--border-h);
+    background: rgba(255,45,85,0.04);
+  }
+  .payload-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  .payload-field label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-h-secondary);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+
+  .payload-field input, .payload-field select {
+    width: 100%;
+    background: #0D0508;
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--crimson);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .payload-field input:focus, .payload-field select:focus {
+    border-color: var(--crimson);
+    box-shadow: 0 0 8px var(--crimson-dim);
+  }
+  .payload-field select option { background: #1A0D12; }
+
+  .payload-preview {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-h-secondary);
+    background: #0D0508;
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    letter-spacing: 0.04em;
+  }
+  .payload-preview span { color: var(--crimson); }
+
+  /* ── INJECT BUTTON ────────────────────────────────────── */
+  .btn-inject {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px 20px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--crimson);
+    background: var(--crimson-dim);
+    color: var(--crimson);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-inject::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 40%, rgba(255,45,85,0.12) 100%);
+    pointer-events: none;
+  }
+  .btn-inject:hover {
+    background: rgba(255,45,85,0.2);
+    box-shadow: 0 0 24px var(--crimson-dim), 0 0 48px rgba(255,45,85,0.1);
+    transform: translateY(-1px);
+  }
+  .btn-inject:active { transform: scale(0.98) translateY(0); }
+
+  /* ── ATTACK LOG (hacker side) ─────────────────────────── */
+  .attack-log-card {
+    background: var(--bg-hacker-card);
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex: 1;
+  }
+  .attack-log-header {
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-h-secondary);
+    border-bottom: 1px solid var(--border-h);
+    background: rgba(255,45,85,0.04);
+  }
+  .attack-log-body {
+    height: 140px;
+    overflow-y: auto;
+    padding: 8px 0;
+    scrollbar-width: thin;
+    scrollbar-color: #3A0015 transparent;
+  }
+  .attack-log-entry {
+    padding: 4px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    display: flex;
+    gap: 12px;
+  }
+  .attack-log-entry .log-ts   { color: var(--text-h-muted); }
+  .attack-log-entry .log-msg  { color: #AA4455; }
+  .attack-log-entry.blocked .log-msg { color: var(--crimson); font-weight: 600; }
+
+  /* ── THREAT COUNTER ───────────────────────────────────── */
+  .threat-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .threat-stat {
+    background: var(--bg-hacker-card);
+    border: 1px solid var(--border-h);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .threat-stat-val {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--crimson);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .threat-stat-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-h-secondary);
+  }
+
+  /* ── SCAN LINES OVERLAY ───────────────────────────────── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.04) 2px,
+      rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* ── SECTION DIVIDER ──────────────────────────────────── */
+  .pipeline-bar {
+    height: 3px;
+    background: linear-gradient(90deg,
+      var(--phosphor) 0%,
+      var(--cyan) 30%,
+      var(--crimson) 70%,
+      var(--crimson) 100%
+    );
+    position: relative;
+  }
+  .pipeline-bar::after {
+    content: '⬛ SECURITY BOUNDARY ⬛';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--bg-base);
+    background: linear-gradient(90deg, var(--cyan), var(--crimson));
+    padding: 1px 10px;
+    white-space: nowrap;
+  }
+
+  /* ── SCROLLBARS ───────────────────────────────────────── */
+  ::-webkit-scrollbar       { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+
+  /* ── MOBILE RESPONSIVENESS ────────────────────────────── */
+  @media (max-width: 960px) {
+    .pipeline-bar::after { display: none; }
+    .hacker { border-left: none; border-top: 1px solid #2A0010; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── ATTACK BLOCKED BANNER ──────────────────────────────── -->
+<div id="attack-banner">
+  <div class="banner-icon">🛡️</div>
+  <div class="banner-title">ATTACK BLOCKED</div>
+  <div class="banner-sub">Unauthenticated Data Injection Rejected</div>
+</div>
+
+<!-- ── MASTHEAD ────────────────────────────────────────────── -->
+<header class="masthead">
+  <div class="masthead-brand">
+    <div class="brand-mark">〜</div>
+    <div>
+      <div class="brand-name">AQUAGUARD</div>
+      <div class="brand-tagline">Smart Water Security Monitor</div>
+    </div>
+  </div>
+  <div class="masthead-status">
+    <div class="status-dot" id="conn-dot"></div>
+    <span id="conn-label">NOT CONNECTED</span>
+  </div>
+</header>
+
+<div class="pipeline-bar"></div>
+
+<!-- ── WORKSPACE ──────────────────────────────────────────── -->
+<div class="workspace">
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION A — INFRASTRUCTURE MONITOR (DEFENDER)
+       ════════════════════════════════════════════════════════ -->
+  <section class="defender">
+    <div class="section-eyebrow">
+      <span>⬡</span>
+      <span>Section A — Infrastructure Monitor</span>
+      <span style="margin-left:auto; color: var(--text-muted);">DEFENDER</span>
+    </div>
+    <div class="defender-body">
+
+      <!-- Connect Control -->
+      <div class="connect-row">
+        <button class="btn-connect" id="btn-connect" onclick="connectSerial()">
+          <span>⚡</span> Connect to USB
+        </button>
+        <button class="btn-connect" id="btn-demo" onclick="toggleDemo()" style="border-color:var(--cyan);color:var(--cyan);">
+          <span>▶</span> Demo Mode
+        </button>
+        <span class="conn-hint" id="conn-hint">No hardware? Run Demo Mode to simulate live flow</span>
+      </div>
+
+      <!-- PPS Big Number -->
+      <div class="pps-stage" id="pps-stage">
+        <div class="pps-label">PULSES PER SECOND</div>
+        <div class="pps-value" id="pps-value">0</div>
+        <div class="pps-unit">PPS</div>
+        <div class="status-badge status-waiting" id="status-badge">
+          ⏳ AWAITING SIGNAL
+        </div>
+      </div>
+
+      <!-- Telemetry Card -->
+      <div class="telemetry-card">
+        <div class="telemetry-header">
+          <span>Live Telemetry</span>
+          <span class="token-status-chip waiting" id="token-chip">TOKEN: —</span>
+        </div>
+        <div class="telemetry-rows">
+          <div class="telemetry-row">
+            <span class="trow-key">RAW PAYLOAD</span>
+            <span class="trow-val redacted" id="raw-payload">no data</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="trow-key">FLOW RATE</span>
+            <span class="trow-val" id="trow-pps">—</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="trow-key">SENSOR STATUS</span>
+            <span class="trow-val" id="trow-status">—</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="trow-key">AUTH TOKEN</span>
+            <span class="trow-val redacted" id="trow-token">—</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="trow-key">VERIFICATION</span>
+            <span class="trow-val redacted" id="trow-verify">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Log -->
+      <div class="log-card">
+        <div class="log-header">
+          <span>Security Event Log</span>
+          <button class="log-clear" onclick="clearLog()">CLEAR</button>
+        </div>
+        <div class="log-body" id="log-body">
+          <div class="log-entry evt-info">
+            <span class="log-ts" id="init-ts">--:--:--</span>
+            <span class="log-msg">AquaGuard v1.0 initialised. Awaiting USB connection.</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /defender-body -->
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION B — HACKER CONSOLE (ATTACKER)
+       ════════════════════════════════════════════════════════ -->
+  <section class="hacker">
+    <div class="section-eyebrow" style="color: var(--crimson)">
+      <span>☠</span>
+      <span>Section B — Hacker Console</span>
+      <span style="margin-left:auto; color: var(--text-h-muted);">ATTACKER</span>
+    </div>
+    <div class="hacker-body">
+
+      <!-- Intro blurb -->
+      <div class="hacker-intro">
+        <p>
+          Simulate a <strong>False Data Injection (FDI) attack</strong>.
+          Craft a malicious payload and inject it directly into the
+          dashboard's data pipeline — bypassing the Arduino entirely.
+          The defender's token-verification layer will intercept it.
+        </p>
+      </div>
+
+      <!-- Threat Stats -->
+      <div class="threat-stats">
+        <div class="threat-stat">
+          <div class="threat-stat-val" id="attack-count">0</div>
+          <div class="threat-stat-label">Attacks Sent</div>
+        </div>
+        <div class="threat-stat">
+          <div class="threat-stat-val" id="block-count">0</div>
+          <div class="threat-stat-label">Attacks Blocked</div>
+        </div>
+      </div>
+
+      <!-- Payload Constructor -->
+      <div class="payload-card">
+        <div class="payload-header">⚙ Payload Constructor</div>
+        <div class="payload-body">
+          <div class="payload-field">
+            <label>Fake PPS Value</label>
+            <input type="number" id="fake-pps" value="15" min="0" max="100" oninput="updatePreview()" />
+          </div>
+          <div class="payload-field">
+            <label>Fake Status</label>
+            <select id="fake-status" onchange="updatePreview()">
+              <option value="LEAK">LEAK</option>
+              <option value="NORMAL">NORMAL</option>
+              <option value="IDLE">IDLE</option>
+            </select>
+          </div>
+          <div class="payload-field">
+            <label>Token Override (leave blank for null)</label>
+            <input type="text" id="fake-token" placeholder="wrong_token or leave blank" oninput="updatePreview()" />
+          </div>
+          <div class="payload-preview">
+            PAYLOAD → <span id="preview-text">15,LEAK,null</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inject Button -->
+      <button class="btn-inject" onclick="injectAttack()">
+        <span>💉</span>
+        <span>INJECT FALSE DATA</span>
+      </button>
+
+      <!-- Attack Log -->
+      <div class="attack-log-card">
+        <div class="attack-log-header">☠ Attack Attempt Log</div>
+        <div class="attack-log-body" id="attack-log-body">
+          <div class="attack-log-entry">
+            <span class="log-ts">--:--:--</span>
+            <span class="log-msg">Console ready. No attacks sent.</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /hacker-body -->
+  </section>
+
+</div><!-- /workspace -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     JAVASCRIPT — WEB SERIAL + SECURITY LOGIC
+     ════════════════════════════════════════════════════════════ -->
+<script>
+// ── SECURITY CONFIG ──────────────────────────────────────────
+// This must match the AUTH_TOKEN defined in the Arduino firmware.
+const EXPECTED_TOKEN = 'SEC-H2O-7F3A9C';
+
+// ── LEAK THRESHOLD ───────────────────────────────────────────
+// Hardware model: leakage tap is BEFORE the flow sensor.
+// When water is diverted (leak), less reaches the sensor → PPS drops.
+//   PPS >= 10  →  NORMAL
+//   PPS  1-9   →  LEAK   (water being drawn off upstream)
+//   PPS  0     →  IDLE   (no supply / system off)
+const LEAK_THRESHOLD = 10;
+
+// ── STATE ────────────────────────────────────────────────────
+let port        = null;
+let reader      = null;
+let isConnected = false;
+let attackCount = 0;
+let blockCount  = 0;
+let bannerTimer = null;
+
+// ── DEMO / SIMULATION STATE ──────────────────────────────────
+let demoActive   = false;
+let demoInterval = null;
+let demoTick     = 0;
+
+// Raw PPS values only — status is derived by the dashboard, not the sender.
+// Mirrors exactly what the Arduino would stream.
+const DEMO_SCENARIO = [
+  // Phase 1 — normal supply; full flow reaches sensor
+  14, 15, 13, 16, 14, 15, 13, 14,
+  // Phase 2 — leakage tap opened; PPS drops below threshold
+   8,  6,  5,  4,  5,  7,  6,  5,
+  // Phase 3 — leakage tap closed; PPS recovers to normal
+  11, 13, 14, 15, 14, 16,
+  // Phase 4 — supply shut off; sensor reads zero
+   0,  0,  0,
+  // Phase 5 — supply restored; back to normal
+  12, 14, 15, 13, 15,
+];
+
+// ── DERIVE STATUS FROM PPS ───────────────────────────────────
+function deriveStatus(pps) {
+  if (pps === 0)               return 'IDLE';
+  if (pps < LEAK_THRESHOLD)    return 'LEAK';
+  return 'NORMAL';
+}
+
+function toggleDemo() {
+  if (demoActive) { stopDemo(); } else { startDemo(); }
+}
+
+function startDemo() {
+  if (isConnected) return; // don't override real USB
+  demoActive = true;
+  demoTick   = 0;
+
+  document.getElementById('btn-demo').innerHTML         = '<span>⏹</span> Stop Demo';
+  document.getElementById('btn-demo').style.background  = 'rgba(0,212,255,0.1)';
+  document.getElementById('conn-dot').classList.add('connected');
+  document.getElementById('conn-label').textContent     = 'DEMO MODE';
+  document.getElementById('conn-hint').textContent      = 'Simulating live sensor data — no hardware needed';
+
+  addLog('▶ Demo simulation started. Threshold: PPS < 10 = LEAK.', 'info');
+
+  runDemoTick();
+  demoInterval = setInterval(runDemoTick, 1800);
+}
+
+function stopDemo() {
+  demoActive = false;
+  clearInterval(demoInterval);
+  demoInterval = null;
+
+  document.getElementById('btn-demo').innerHTML         = '<span>▶</span> Demo Mode';
+  document.getElementById('btn-demo').style.background  = 'transparent';
+  document.getElementById('conn-dot').classList.remove('connected');
+  document.getElementById('conn-label').textContent     = 'NOT CONNECTED';
+  document.getElementById('conn-hint').textContent      = 'No hardware? Run Demo Mode to simulate live flow';
+
+  addLog('⏹ Demo simulation stopped.', 'warn');
+}
+
+function runDemoTick() {
+  const basePPS = DEMO_SCENARIO[demoTick % DEMO_SCENARIO.length];
+  // Small jitter for realism, but clamp to 0
+  const jitter  = basePPS > 0 ? Math.floor(Math.random() * 3) - 1 : 0;
+  const pps     = Math.max(0, basePPS + jitter);
+  // Status is derived here — Arduino only sends PPS + token
+  const status  = deriveStatus(pps);
+  const payload = `${pps},${status},${EXPECTED_TOKEN}`;
+  addLog(`SIM ← "${payload}"`, 'info');
+  processPayload(payload);
+  demoTick++;
+}
+
+// ── BOOT TIMESTAMP ───────────────────────────────────────────
+document.getElementById('init-ts').textContent = ts();
+
+// ── UTILITIES ────────────────────────────────────────────────
+function ts() {
+  return new Date().toLocaleTimeString('en-GB', { hour12: false });
+}
+
+function updatePreview() {
+  const pps    = document.getElementById('fake-pps').value   || '15';
+  const status = document.getElementById('fake-status').value;
+  const token  = document.getElementById('fake-token').value.trim() || 'null';
+  document.getElementById('preview-text').textContent = `${pps},${status},${token}`;
+}
+
+// ── LOG HELPERS ───────────────────────────────────────────────
+function addLog(msg, type = 'info') {
+  const body  = document.getElementById('log-body');
+  const entry = document.createElement('div');
+  entry.className = `log-entry evt-${type}`;
+  entry.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-msg">${msg}</span>`;
+  body.appendChild(entry);
+  body.scrollTop = body.scrollHeight;
+}
+
+function addAttackLog(msg, blocked = false) {
+  const body  = document.getElementById('attack-log-body');
+  const entry = document.createElement('div');
+  entry.className = `attack-log-entry ${blocked ? 'blocked' : ''}`;
+  entry.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-msg">${msg}</span>`;
+  body.appendChild(entry);
+  body.scrollTop = body.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log-body').innerHTML = '';
+  addLog('Event log cleared.', 'info');
+}
+
+// ── BANNER ────────────────────────────────────────────────────
+function showAttackBanner() {
+  const banner = document.getElementById('attack-banner');
+  banner.style.display = 'block';
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => { banner.style.display = 'none'; }, 3500);
+}
+
+// ── UI UPDATE — VERIFIED DEFENDER ────────────────────────────
+function updateDefenderUI(pps, status) {
+  const ppsEl   = document.getElementById('pps-value');
+  const stageEl = document.getElementById('pps-stage');
+  const badgeEl = document.getElementById('status-badge');
+
+  // Status derived from PPS threshold (PPS >= 10 = NORMAL, 1-9 = LEAK, 0 = IDLE)
+  const statusMap = {
+    NORMAL: { cls: 'status-normal', label: '\u2705 NORMAL FLOW — PPS \u2265 10'        },
+    LEAK:   { cls: 'status-leak',   label: '\ud83d\udea8 LEAKAGE DETECTED — PPS < 10'  },
+    IDLE:   { cls: 'status-idle',   label: '\u23f8\ufe0f IDLE — NO SUPPLY'              },
+  };
+  const map = statusMap[status] || { cls: 'status-waiting', label: '\u23f3 AWAITING SIGNAL' };
+
+  // Update PPS number — force to string so 0 still displays
+  ppsEl.textContent = String(pps);
+  ppsEl.className   = 'pps-value ' + map.cls;
+
+  // Update stage background glow
+  stageEl.className = 'pps-stage ' + map.cls;
+
+  // Update badge
+  badgeEl.className   = 'status-badge ' + map.cls;
+  badgeEl.textContent = map.label;
+}
+
+// ── CORE: TOKEN VERIFICATION & DATA PARSER ────────────────────
+// Security gatekeeper — called by USB serial reader AND the hacker inject button.
+// Supports two serial formats from the Arduino:
+//   1. "Pulses per second: 23"        (plain Arduino sketch, no token)
+//   2. "23,NORMAL,SEC-H2O-7F3A9C"     (updated sketch with auth token)
+// STATUS IS ALWAYS DERIVED FROM PPS HERE — never trusted from the sender.
+function processPayload(raw) {
+  if (raw.startsWith('#')) return;
+  const trimmed = raw.trim();
+  if (trimmed === '') return;
+
+  let pps, token;
+
+  // ── FORMAT DETECTION ─────────────────────────────────────
+  // Format A: "Pulses per second: 23"   (original plain sketch)
+  // Format B: "23,NORMAL,SEC-H2O-7F3A9C" (updated sketch with token — 3 parts)
+  // Format C: "23,NORMAL" or "23,IDLE"   (partial CSV, no token — auto-trust)
+  // Format D: "23"                        (bare number — auto-trust)
+
+  const plainMatch = trimmed.match(/^Pulses per second:\s*(\d+)/i);
+
+  if (plainMatch) {
+    // Format A — plain text label
+    pps   = parseInt(plainMatch[1], 10);
+    token = EXPECTED_TOKEN;
+
+  } else {
+    const parts = trimmed.split(',');
+    pps = parseInt(parts[0], 10);
+
+    if (parts.length >= 3) {
+      // Format B — full CSV with token
+      token = parts[2].trim();
+    } else {
+      // Format C/D — no token present, auto-trust (plain Arduino without auth sketch)
+      token = EXPECTED_TOKEN;
+    }
+  }
+
+  // Guard: unrecognised / corrupt frame
+  if (isNaN(pps)) {
+    addLog('Unrecognised frame ignored: ' + trimmed, 'warn');
+    return;
+  }
+
+  // ── DERIVE STATUS FROM PPS (dashboard logic, not sender) ──
+  const status = deriveStatus(pps);
+
+  // ── TOKEN VERIFICATION ────────────────────────────────────
+  const isAuthentic = (token === EXPECTED_TOKEN);
+
+  // Update raw telemetry fields
+  document.getElementById('raw-payload').textContent = raw.trim();
+  document.getElementById('raw-payload').className   = 'trow-val ' + (isAuthentic ? 'highlight' : 'redacted');
+  document.getElementById('trow-pps').textContent    = pps + ' PPS';
+  document.getElementById('trow-status').textContent = status + (pps < LEAK_THRESHOLD && pps > 0 ? ' (PPS < 10)' : pps === 0 ? ' (PPS = 0)' : ' (PPS >= 10)');
+  document.getElementById('trow-token').textContent  = isAuthentic ? token : `"${token}" \u2717`;
+
+  if (isAuthentic) {
+    // ── ACCEPT: Genuine Arduino data ──────────────────────
+    document.getElementById('trow-verify').textContent = '\u2705 TOKEN VALID \u2014 ACCEPTED';
+    document.getElementById('trow-verify').className   = 'trow-val highlight';
+    document.getElementById('trow-verify').style.color = '';
+    document.getElementById('trow-token').className    = 'trow-val highlight';
+    document.getElementById('trow-token').style.color  = '';
+
+    const chip = document.getElementById('token-chip');
+    chip.textContent = 'TOKEN: VALID \u2713';
+    chip.className   = 'token-status-chip valid';
+
+    // Update live monitor — status is determined by PPS threshold
+    updateDefenderUI(pps, status);
+
+    const evtType = status === 'LEAK' ? 'warn' : status === 'IDLE' ? 'warn' : 'ok';
+    const leakNote = status === 'LEAK' ? ' \u26a0\ufe0f Upstream diversion detected!' : '';
+    addLog(`[ACCEPTED] PPS=${pps} => ${status}${leakNote}`, evtType);
+
+  } else {
+    // ── REJECT: Forged / unauthenticated payload ──────────
+    document.getElementById('trow-verify').textContent = '\ud83d\udeab TOKEN INVALID \u2014 REJECTED';
+    document.getElementById('trow-verify').className   = 'trow-val';
+    document.getElementById('trow-verify').style.color = 'var(--crimson)';
+    document.getElementById('trow-token').className    = 'trow-val';
+    document.getElementById('trow-token').style.color  = 'var(--crimson)';
+
+    const chip = document.getElementById('token-chip');
+    chip.textContent = 'TOKEN: INVALID \u2717';
+    chip.className   = 'token-status-chip invalid';
+
+    // CRITICAL: Do NOT update the PPS display — reject entirely
+    addLog(`\ud83d\udeab [BLOCKED] Unauthenticated payload rejected. Token: "${token}"`, 'attack');
+    showAttackBanner();
+  }
+}
+
+// ── WEB SERIAL — CONNECT ──────────────────────────────────────
+async function connectSerial() {
+  if (!('serial' in navigator)) {
+    alert('Web Serial API not supported.\nPlease use Chrome or Edge (v89+).');
+    return;
+  }
+
+  if (isConnected) {
+    await disconnectSerial();
+    return;
+  }
+
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    isConnected = true;
+    document.getElementById('btn-connect').innerHTML  = '<span>✖</span> Disconnect';
+    document.getElementById('conn-dot').classList.add('connected');
+    document.getElementById('conn-label').textContent = 'CONNECTED';
+    document.getElementById('conn-hint').textContent  = '9600 baud · reading telemetry…';
+
+    addLog('USB serial port opened at 9600 baud.', 'info');
+    addLog('Telemetry stream active. Listening for authenticated frames…', 'ok');
+
+    readLoop();
+
+  } catch (err) {
+    if (err.name !== 'NotFoundError') {
+      addLog(`Connection error: ${err.message}`, 'warn');
+    }
+  }
+}
+
+// ── WEB SERIAL — READ LOOP ────────────────────────────────────
+// Uses a simple Uint8Array reader + manual line buffering.
+// Avoids the pipeTo/TransformStream race condition on port.readable.
+async function readLoop() {
+  const decoder = new TextDecoder();
+  let lineBuffer = '';
+
+  reader = port.readable.getReader();
+  addLog('Read loop started — waiting for bytes…', 'info');
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      // Decode the raw Uint8Array chunk into a string
+      const chunk = decoder.decode(value, { stream: true });
+
+      // Buffer it and split on newlines
+      lineBuffer += chunk;
+      const lines = lineBuffer.split(/\r?\n/);
+
+      // Keep the last incomplete fragment in the buffer
+      lineBuffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          addLog(`RAW ← "${trimmed}"`, 'info');   // debug: shows every raw line
+          processPayload(trimmed);
+        }
+      }
+    }
+  } catch (err) {
+    if (isConnected) addLog(`Stream error: ${err.message}`, 'warn');
+  } finally {
+    try { reader.releaseLock(); } catch(_) {}
+  }
+}
+
+// ── WEB SERIAL — DISCONNECT ───────────────────────────────────
+async function disconnectSerial() {
+  isConnected = false;
+  try {
+    if (reader) { await reader.cancel(); }
+    await port.close();
+  } catch (_) {}
+  port   = null;
+  reader = null;
+
+  document.getElementById('btn-connect').innerHTML  = '<span>⚡</span> Connect to USB';
+  document.getElementById('conn-dot').classList.remove('connected');
+  document.getElementById('conn-label').textContent = 'NOT CONNECTED';
+  document.getElementById('conn-hint').textContent  = 'Requires Chrome/Edge · Web Serial API';
+  addLog('USB port disconnected.', 'warn');
+}
+
+// ── HACKER CONSOLE — FDI INJECT ──────────────────────────────
+function injectAttack() {
+  const pps    = document.getElementById('fake-pps').value    || '15';
+  const status = document.getElementById('fake-status').value;
+  const token  = document.getElementById('fake-token').value.trim() || 'null';
+  const payload = `${pps},${status},${token}`;
+
+  attackCount++;
+  document.getElementById('attack-count').textContent = attackCount;
+
+  addAttackLog(`Injecting → "${payload}"`, false);
+
+  // The hacker calls processPayload() directly — exactly as if
+  // they had found a way to push data into the frontend pipeline.
+  // The token verification inside processPayload() catches them.
+  processPayload(payload);
+
+  // Only count as blocked when the token is wrong (i.e. rejected)
+  const isBlocked = (token !== EXPECTED_TOKEN);
+  if (isBlocked) {
+    blockCount++;
+    document.getElementById('block-count').textContent = blockCount;
+    addAttackLog(`⛔ Injection blocked. Token "${token}" rejected by gatekeeper.`, true);
+  } else {
+    addAttackLog(`⚠ Injection accepted — token matched! Data written to display.`, false);
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+updatePreview();
+</script>
+
+</body>
+</html>
